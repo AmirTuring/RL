@@ -20,13 +20,16 @@ export TZ=America/Los_Angeles
 
 apt-get update
 apt-get install -y --no-install-recommends \
-    jq \
+    git \
     curl \
     git \
     rsync \
     wget \
     less \
     vim \
+    openssh-server \
+    nginx \
+    software-properties-common \
 
 # Nsight
 apt install -y --no-install-recommends gnupg
@@ -38,6 +41,24 @@ apt install -y nsight-systems-cli
 
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+
+# Configure SSH for RunPod
+mkdir -p /var/run/sshd
+mkdir -p /root/.ssh
+
+# SSH configuration for RunPod compatibility
+echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
+echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
+echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config
+echo 'Port 22' >> /etc/ssh/sshd_config
+echo 'AddressFamily inet' >> /etc/ssh/sshd_config
+
+# Set root password (RunPod will override this)
+echo 'root:runpod' | chpasswd
+
+# Generate SSH host keys
+ssh-keygen -A
+
 EOF
 
 # Install uv and python
@@ -90,12 +111,20 @@ uv sync --link-mode symlink --locked --no-install-project
 uv sync --link-mode symlink --locked --extra vllm --no-install-project
 uv sync --link-mode symlink --locked --extra mcore --no-install-project
 uv sync --link-mode symlink --locked --all-groups --no-install-project
+
+# Install Jupyter
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink \
+    jupyterlab \
+    notebook \
+    ipywidgets
 EOF
 
 ENV PATH="/opt/nemo_rl_venv/bin:$PATH"
 ENV NEMO_RL_VENV_DIR=/opt/ray_venvs
 
-WORKDIR /opt/nemo-rl
+# Create workspace and set as working directory
+RUN mkdir -p /workspace
+WORKDIR /workspace
 
 FROM hermetic AS release
 
@@ -110,11 +139,41 @@ LABEL com.nvidia.build.ref="${NVIDIA_BUILD_REF}"
 
 ENV NEMO_RL_VENV_DIR=/opt/ray_venvs
 
-# Copy in source from build context (defaults to cloned repo, can be overridden)
-COPY --from=nemo-rl . /opt/nemo-rl
+# Copy NeMo RL source to workspace
+COPY --from=nemo-rl . /workspace/nemo-rl
+WORKDIR /workspace/nemo-rl
 # Unshallow the repo to get the full history (in the case it was from the scratch layer).
 # Potentially not necessary if the repo is passed in as a complete repository (w/ full git history),
 # so do a quick check before trying to unshallow.
 RUN git rev-parse --is-shallow-repository | grep -q true && git fetch --unshallow || true
 RUN UV_LINK_MODE=symlink uv run nemo_rl/utils/prefetch_venvs.py
+
+# Create simple startup script for RunPod
+RUN <<"EOF" cat > /start.sh
+#!/bin/bash
+
+# Start SSH service
+service ssh start
+
+# Start Jupyter Lab
+jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser --notebook-dir=/workspace &
+
+# Keep container running
+if [ $# -eq 0 ]; then
+    echo "✅ NeMo RL environment ready!"
+    echo "📁 Workspace: /workspace/nemo-rl"
+    echo "📓 JupyterLab: http://localhost:8888"
+    tail -f /dev/null
+else
+    exec "$@"
+fi
+EOF
+
+RUN chmod +x /start.sh
+
+# Expose ports for SSH and Jupyter
+EXPOSE 22 8888
+
+# Set default command to comprehensive startup script
+CMD ["/start.sh"]
 

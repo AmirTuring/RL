@@ -19,6 +19,8 @@ release_run*
 ckpts/
 3rdparty/vllm
 
+.env
+
 # Test
 coverage.json
 .coverage*
