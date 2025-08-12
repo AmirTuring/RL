@@ -66,6 +66,9 @@ ARG UV_VERSION=0.7.2
 ARG PYTHON_VERSION=3.12
 ENV PATH="/root/.local/bin:$PATH"
 ENV CUDA_HOME=/usr/local/cuda
+ENV MAX_JOBS=2
+ENV FLASH_ATTENTION_FORCE_BUILD=FALSE
+ENV FLASH_ATTENTION_USE_PREBUILT=TRUE
 RUN curl -LsSf https://astral.sh/uv/${UV_VERSION}/install.sh | sh && \
     uv python install ${PYTHON_VERSION}
 
@@ -92,9 +95,12 @@ ENV UV_LINK_MODE=copy
 RUN <<"EOF" bash -exu
 uv venv ${UV_PROJECT_ENVIRONMENT}
 
-# NOTE: Use pre-built wheels to avoid long compilation times
-VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink setuptools torch==2.7.0 psutil ninja --torch-backend=cu128
-VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink flash-attn==2.7.4.post1 --no-build-isolation
+# NOTE: Use pre-built wheels to avoid compilation - adjust PyTorch version to match wheel
+# Install PyTorch 2.5 with CUDA 12.4 to match the flash-attn wheel
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink setuptools torch==2.5.0 psutil ninja --torch-backend=cu124
+# Download and install pre-built flash-attn wheel to avoid memory-intensive compilation
+wget -q https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.3.14/flash_attn-2.6.3+cu124torch2.5-cp312-cp312-linux_x86_64.whl
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink flash_attn-2.6.3+cu124torch2.5-cp312-cp312-linux_x86_64.whl
 EOF
 
 # First copy only the dependency files
