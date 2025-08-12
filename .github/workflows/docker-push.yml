@@ -22,11 +22,13 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           submodules: recursive
 
       - name: Set up Docker Buildx
