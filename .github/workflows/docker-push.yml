@@ -23,7 +23,6 @@ jobs:
       contents: read
       packages: write
       actions: read
-      metadata: read
 
     steps:
       - name: Checkout repository
