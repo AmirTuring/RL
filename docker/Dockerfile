@@ -65,6 +65,7 @@ EOF
 ARG UV_VERSION=0.7.2
 ARG PYTHON_VERSION=3.12
 ENV PATH="/root/.local/bin:$PATH"
+ENV CUDA_HOME=/usr/local/cuda
 RUN curl -LsSf https://astral.sh/uv/${UV_VERSION}/install.sh | sh && \
     uv python install ${PYTHON_VERSION}
 
