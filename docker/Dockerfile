@@ -91,8 +91,9 @@ ENV UV_LINK_MODE=copy
 RUN <<"EOF" bash -exu
 uv venv ${UV_PROJECT_ENVIRONMENT}
 
-VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink setuptools torch==2.7.0 psutil ninja --torch-backend=cu128
-VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink flash-attn==2.7.4.post1 --no-build-isolation
+# NOTE: Use Torch 2.6.0 + CUDA 12.4 wheels so flash-attn installs from a prebuilt wheel (no source build).
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink setuptools torch==2.6.0 psutil ninja --torch-backend=cu124
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink --only-binary=:all: flash-attn==2.7.4.post1 --no-build-isolation
 EOF
 
 # First copy only the dependency files
