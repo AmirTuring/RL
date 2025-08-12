@@ -82,11 +82,6 @@ FROM base AS hermetic
 
 WORKDIR /opt/nemo-rl
 
-# Variables to control the build of TE. If there are issues with parallelization, consider
-# setting these to 1.
-ARG MAX_JOBS
-ARG NVTE_BUILD_THREADS_PER_JOB
-
 ENV UV_PROJECT_ENVIRONMENT=/opt/nemo_rl_venv
 ENV UV_LINK_MODE=copy
 
@@ -98,9 +93,9 @@ uv venv ${UV_PROJECT_ENVIRONMENT}
 # NOTE: Use pre-built wheels to avoid compilation - adjust PyTorch version to match wheel
 # Install PyTorch 2.5 with CUDA 12.4 to match the flash-attn wheel
 VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink setuptools torch==2.5.0 psutil ninja --torch-backend=cu124
-# Download and install pre-built flash-attn wheel to avoid memory-intensive compilation
-wget -q https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.3.14/flash_attn-2.6.3+cu124torch2.5-cp312-cp312-linux_x86_64.whl
-VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink flash_attn-2.6.3+cu124torch2.5-cp312-cp312-linux_x86_64.whl
+# Download pre-built flash-attn wheel to /tmp for later installation
+wget -q -O /tmp/flash_attn-2.6.3+cu124torch2.5-cp312-cp312-linux_x86_64.whl https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.3.14/flash_attn-2.6.3+cu124torch2.5-cp312-cp312-linux_x86_64.whl
+# Don't install flash-attn yet - will install after main dependencies to avoid conflicts
 EOF
 
 # First copy only the dependency files
@@ -115,10 +110,19 @@ RUN <<"EOF" bash -exu
 # Do everything in one layer to prevent large layers.
 
 # The venv is symlinked to avoid bloating the layer size
+# Skip vllm extra to avoid flash-attn compilation issues
 uv sync --link-mode symlink --locked --no-install-project
-uv sync --link-mode symlink --locked --extra vllm --no-install-project
+# uv sync --link-mode symlink --locked --extra vllm --no-install-project  # Skip this
 uv sync --link-mode symlink --locked --extra mcore --no-install-project
 uv sync --link-mode symlink --locked --all-groups --no-install-project
+
+# Install the pre-built flash-attn wheel first
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink \
+    /tmp/flash_attn-2.6.3+cu124torch2.5-cp312-cp312-linux_x86_64.whl
+
+# Now install vllm, which should use the already-installed flash-attn
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink \
+    vllm
 
 # Install Jupyter
 VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink \
