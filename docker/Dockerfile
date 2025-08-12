@@ -93,10 +93,8 @@ RUN <<"EOF" bash -exu
 uv venv ${UV_PROJECT_ENVIRONMENT}
 
 # NOTE: Use pre-built wheels to avoid long compilation times
-# Install PyTorch with CUDA 12.1 support (widely available pre-built wheels)
-VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink setuptools torch==2.7.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-# Install flash-attention from pre-built wheel (much faster than compiling)
-VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink --only-binary=:all: flash-attn==2.7.4.post1
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink setuptools torch==2.7.0 psutil ninja --torch-backend=cu128
+VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT uv pip install --link-mode symlink flash-attn==2.7.4.post1 --no-build-isolation
 EOF
 
 # First copy only the dependency files
